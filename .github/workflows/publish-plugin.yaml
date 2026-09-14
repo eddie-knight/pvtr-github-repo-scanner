@@ -49,6 +49,10 @@ jobs:
   publish:
     name: publish
     runs-on: ubuntu-latest
+    # The pin says nothing about this file's content or the branch it ran
+    # from; keep a stray dispatch off a branch copy. Containment against write
+    # access is a repo-settings environment with required reviewers (follow-up).
+    if: github.ref == 'refs/heads/main'
     # The first successful publish TOFU-pinned the signer, so never let two
     # publishes race; queue them instead. Job-level so it applies when called.
     concurrency:
@@ -72,6 +76,17 @@ jobs:
         with:
           ref: ${{ inputs.tag }}
           persist-credentials: false
+          fetch-depth: 0 # need origin/main to check the tag against
+      # The tag's own code runs later in this job (goreleaser before.hooks, then
+      # the built binary) with the OIDC token in env, and any write-access user
+      # can tag any commit. Refuse an off-main tag before that point.
+      - name: require the tag to be on main
+        run: |
+          set -euo pipefail
+          # Fully qualified: a bare origin/main could be shadowed by a fetched
+          # tag of that name (refs/tags/ wins the lookup).
+          git merge-base --is-ancestor HEAD refs/remotes/origin/main ||
+            { echo "::error::the dispatched tag is not reachable from main"; exit 1; }
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
