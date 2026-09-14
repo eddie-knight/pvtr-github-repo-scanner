@@ -26,3 +26,15 @@ jobs:
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
       image-registry-password: ${{ secrets.GITHUB_TOKEN }}
+  publish-plugin:
+    needs: release
+    # full-tag is empty when the merged PR carried no `release` label.
+    if: ${{ needs.release.outputs.full-tag != '' }}
+    permissions:
+      contents: read
+      id-token: write   # hub trusted-publishing token + Sigstore keyless signing
+    uses: ./.github/workflows/publish-plugin.yaml
+    with:
+      tag: ${{ needs.release.outputs.full-tag }}
+      hub-url: https://hub.grc.store
+      dist-artifact: release-dist # uploaded by the reusable release workflow, 1-day retention
